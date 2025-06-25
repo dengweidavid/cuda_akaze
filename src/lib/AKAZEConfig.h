@@ -86,9 +86,9 @@ struct AKAZEOptions {
   AKAZEOptions() {
     soffset = 1.6f;
     derivative_factor = 1.5f;
-    omax = 4;
-    nsublevels = 4;
-    dthreshold = 0.001f;
+    omax = 1;
+    nsublevels = 1;
+    dthreshold = 0.0001f;
     min_dthreshold = 0.00001f;
 
     diffusivity = PM_G2;
