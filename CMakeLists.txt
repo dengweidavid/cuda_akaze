@@ -5,7 +5,7 @@ if (COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
 endif ()
 
-option(BUILD_EXAMPLES "Build example applications" OFF)
+option(BUILD_EXAMPLES "Build example applications" ON)
 
 # ============================================================================ #
 # Build Type. By default is release
