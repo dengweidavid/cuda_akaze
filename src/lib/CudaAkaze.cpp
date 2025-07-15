@@ -119,10 +119,12 @@ int mwvcv::CudaAkaze::createNonlinearScaleSpace(const cv::Mat& img)
     Limg.h_data_ = reinterpret_cast<float*>(img_32F.data);
     Limg.download(); // NOLINT
 
-    contrastPercentile(Limg, Ltemp, Lsmooth, options_.kcontrast_percentile, options_.kcontrast_nbins,
-                       options_.kcontrast);
-
-    timing_.kcontrast = 1000.0 * (static_cast<double>(cv::getTickCount()) - t1) / cv::getTickFrequency();
+    if (evolution_.size() > 1) {
+        // kcontrast is only needed when we have more than 1 evolution level
+        contrastPercentile(Limg, Ltemp, Lsmooth, options_.kcontrast_percentile, options_.kcontrast_nbins,
+                           options_.kcontrast);
+        timing_.kcontrast = 1000.0 * (static_cast<double>(cv::getTickCount()) - t1) / cv::getTickFrequency();
+    }
 
     const int kernelSize = static_cast<int>(2 * ceil((options_.soffset - 0.8) / 0.3) + 3);
     lowPass(Limg, Lt, Ltemp, options_.soffset * options_.soffset, kernelSize);

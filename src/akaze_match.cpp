@@ -89,9 +89,8 @@ int main(int argc, char* argv[])
     // Matching descriptors
     std::vector<std::vector<cv::DMatch>> dmatches;
 
-    auto t3 = static_cast<double>(cv::getTickCount());
-
     CudaMatch cudaMatcher;
+    auto t3 = static_cast<double>(cv::getTickCount());
     cudaMatcher.bfmatch(desc1, desc2, dmatches);
 
     auto   t4     = static_cast<double>(cv::getTickCount());
