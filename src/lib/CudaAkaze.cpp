@@ -214,11 +214,16 @@ void mwvcv::CudaAkaze::featureDetection(std::vector<cv::KeyPoint>& kpts)
 
         // Here we limit max working with 16 evolutions (for example, 4 octaves and 4 sublevels)
         // Inside findExtrema function, we define "d_ExtremaIdx[16]", so max 16 results are stored for findExtrema
+        // cuda_points's octave value is stored with intermediate value used inside the function of filterExtrema.
+        // If we aren't going to call filterExtrema in the next step, we will store proper value in.
+        const bool reset_octave = options_.skip_filter_extrema;
         findExtrema(Ldet, LdetP, LdetN, border, thresh, i, evolution_[i].octave, // NOLINT
-                    size, cuda_points, options_.maxkeypoints);
+                    size, cuda_points, options_.maxkeypoints, reset_octave, nump_);
     }
 
-    filterExtrema(cuda_points, cuda_bufferpoints, cuda_ptindices, nump_);
+    if (!options_.skip_filter_extrema) {
+        filterExtrema(cuda_points, cuda_bufferpoints, cuda_ptindices, nump_);
+    }
 
     const auto t3 = static_cast<double>(cv::getTickCount());
 

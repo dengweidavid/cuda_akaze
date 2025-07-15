@@ -47,6 +47,8 @@
 #define ORIENT_S (13 * 16)
 #define EXTRACT_S 64
 
+#define VERBOSE
+
 namespace mwvcv
 {
     struct Conv_t
@@ -90,6 +92,12 @@ namespace mwvcv
                         cv::KeyPoint*& pts, cv::KeyPoint*& ptsbuffer, int*& ptindices, unsigned char*& desc,
                         float*& descbuffer, CudaImage*& ims);
     void   freeBuffers(float* buffers);
+    void   initCompareIndices();
+
+    void clearPoints();
+    int  getPoints(std::vector<cv::KeyPoint>& h_pts, cv::KeyPoint* d_pts, int numPts);
+    void getDescriptors(cv::Mat& h_desc, cv::Mat& d_desc, int numPts);
+    void waitCuda();
 
     double lowPass(CudaImage& inimg, CudaImage& outimg, CudaImage& temp, double var, int kernsize);
     double contrastPercentile(CudaImage& img, CudaImage& temp, CudaImage& blur, float perc, int nbins, float& contrast);
@@ -97,21 +105,14 @@ namespace mwvcv
     double flow(CudaImage& img, CudaImage& flow, DIFFUSIVITY_TYPE type, float kcontrast);
     double nLDStep(CudaImage& img, CudaImage& flow, CudaImage& temp, float stepsize);
 
-    void clearPoints();
-    int  getPoints(std::vector<cv::KeyPoint>& h_pts, cv::KeyPoint* d_pts, int numPts);
-    void getDescriptors(cv::Mat& h_desc, cv::Mat& d_desc, int numPts);
-
     double hessianDeterminant(CudaImage& img, CudaImage& lx, CudaImage& ly, int step);
     double findExtrema(CudaImage& img, CudaImage& imgp, CudaImage& imgn, float border, float dthreshold, int scale,
-                       int octave, float size, cv::KeyPoint* pts, int maxpts);
+                       int octave, float size, cv::KeyPoint* pts, int maxpts, bool reset_octave, int& nump);
     void   filterExtrema(cv::KeyPoint* pts, cv::KeyPoint* newpts, int* kptindices, int& nump);
 
     double findOrientation(cv::KeyPoint* d_pts, std::vector<CudaImage>& h_imgs, CudaImage* d_imgs, int numPts);
-    void   initCompareIndices();
     double extractDescriptors(cv::KeyPoint* d_pts, CudaImage* cuda_images, unsigned char* desc_h, float* vals_d,
                               int patsize, int numPts);
-    void   waitCuda();
-
 } // namespace mwvcv
 
 #endif // AKAZE_CUH

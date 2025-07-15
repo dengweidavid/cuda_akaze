@@ -104,6 +104,134 @@ namespace mwvcv
         safeCall(cudaFree(buffers));
     }
 
+    void initCompareIndices()
+    {
+        // 61 bytes, 488 bits
+        // the values in comp_idx_1 and comp_idx_2 is from 0 to 87, which is (2 x 2 + 3 x 3 + 4 x 4) x 3
+        // grid size is 2x2, 3x3 and 4x4, 3 channels (intensity + x-gradient + y-gradient)
+        int comp_idx_1_h[61 * 8];
+        int comp_idx_2_h[61 * 8];
+
+        // 2x2, 3 channels
+        int cntr = 0;
+        for (int j = 0; j < 3; ++j) {
+            for (int i = j + 1; i < 4; ++i) {
+                comp_idx_1_h[cntr] = 3 * j;
+                comp_idx_2_h[cntr] = 3 * i;
+                cntr++;
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            for (int i = j + 1; i < 4; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 1;
+                comp_idx_2_h[cntr] = 3 * i + 1;
+                cntr++;
+            }
+        }
+        for (int j = 0; j < 3; ++j) {
+            for (int i = j + 1; i < 4; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 2;
+                comp_idx_2_h[cntr] = 3 * i + 2;
+                cntr++;
+            }
+        }
+
+        // 3x3
+        for (int j = 4; j < 12; ++j) {
+            for (int i = j + 1; i < 13; ++i) {
+                comp_idx_1_h[cntr] = 3 * j;
+                comp_idx_2_h[cntr] = 3 * i;
+                cntr++;
+            }
+        }
+        for (int j = 4; j < 12; ++j) {
+            for (int i = j + 1; i < 13; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 1;
+                comp_idx_2_h[cntr] = 3 * i + 1;
+                cntr++;
+            }
+        }
+        for (int j = 4; j < 12; ++j) {
+            for (int i = j + 1; i < 13; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 2;
+                comp_idx_2_h[cntr] = 3 * i + 2;
+                cntr++;
+            }
+        }
+
+        // 4x4
+        for (int j = 13; j < 28; ++j) {
+            for (int i = j + 1; i < 29; ++i) {
+                comp_idx_1_h[cntr] = 3 * j;
+                comp_idx_2_h[cntr] = 3 * i;
+                cntr++;
+            }
+        }
+        for (int j = 13; j < 28; ++j) {
+            for (int i = j + 1; i < 29; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 1;
+                comp_idx_2_h[cntr] = 3 * i + 1;
+                cntr++;
+            }
+        }
+        for (int j = 13; j < 28; ++j) {
+            for (int i = j + 1; i < 29; ++i) {
+                comp_idx_1_h[cntr] = 3 * j + 2;
+                comp_idx_2_h[cntr] = 3 * i + 2;
+                cntr++;
+            }
+        }
+
+        // Print out the arrays
+        // printf("comp_idx_1_h = [");
+        // for (int i = 0; i < cntr; ++i) {
+        //     printf("%d", comp_idx_1_h[i]);
+        //     if (i != cntr - 1) {
+        //         printf(", ");
+        //     }
+        // }
+        // printf("]\n");
+        // printf("comp_idx_2_h = [");
+        // for (int i = 0; i < cntr; ++i) {
+        //     printf("%d", comp_idx_2_h[i]);
+        //     if (i != cntr - 1) {
+        //         printf(", ");
+        //     }
+        // }
+        // printf("]\n");
+
+        cudaMemcpyToSymbol(comp_idx_1, comp_idx_1_h, 8 * 61 * sizeof(int));
+        cudaMemcpyToSymbol(comp_idx_2, comp_idx_2_h, 8 * 61 * sizeof(int));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    void clearPoints()
+    {
+        int totPts = 0;
+        safeCall(cudaMemcpyToSymbolAsync(d_PointCounter, &totPts, sizeof(int)));
+    }
+
+    int getPoints(std::vector<cv::KeyPoint>& h_pts, cv::KeyPoint* d_pts, int numPts)
+    {
+        h_pts.resize(numPts);
+        safeCall(cudaMemcpyAsync((float*)&h_pts[0], d_pts, sizeof(cv::KeyPoint) * numPts, cudaMemcpyDeviceToHost,
+                                 copyStream));
+        return numPts;
+    }
+
+    void getDescriptors(cv::Mat& h_desc, cv::Mat& d_desc, int numPts)
+    {
+        h_desc = cv::Mat(numPts, 61, CV_8U);
+        safeCall(cudaMemcpyAsync(h_desc.data, d_desc.data, numPts * 61, cudaMemcpyDeviceToHost, copyStream));
+    }
+
+    void waitCuda()
+    {
+        cudaStreamSynchronize(copyStream);
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -600,29 +728,6 @@ namespace mwvcv
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void clearPoints()
-    {
-        int totPts = 0;
-        safeCall(cudaMemcpyToSymbolAsync(d_PointCounter, &totPts, sizeof(int)));
-    }
-
-    int getPoints(std::vector<cv::KeyPoint>& h_pts, cv::KeyPoint* d_pts, int numPts)
-    {
-        h_pts.resize(numPts);
-        safeCall(cudaMemcpyAsync((float*)&h_pts[0], d_pts, sizeof(cv::KeyPoint) * numPts, cudaMemcpyDeviceToHost,
-                                 copyStream));
-        return numPts;
-    }
-
-    void getDescriptors(cv::Mat& h_desc, cv::Mat& d_desc, int numPts)
-    {
-        h_desc = cv::Mat(numPts, 61, CV_8U);
-        safeCall(cudaMemcpyAsync(h_desc.data, d_desc.data, numPts * 61, cudaMemcpyDeviceToHost, copyStream));
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     __global__ void Derivate(float* imd, float* lxd, float* lyd, int width, int pitch, int height, int step, float fac1,
                              float fac2)
     {
@@ -716,7 +821,8 @@ namespace mwvcv
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     __global__ void FindExtrema(float* imd, float* imp, float* imn, int maxx, int pitch, int maxy, float border,
-                                float dthreshold, int scale, int octave, float size, cv::KeyPoint* pts, int maxpts)
+                                float dthreshold, int scale, int octave, float size, cv::KeyPoint* pts, int maxpts,
+                                bool reset_octave)
     {
         int x = blockIdx.x * 32 + threadIdx.x;
         int y = blockIdx.y * 16 + threadIdx.y;
@@ -745,7 +851,7 @@ namespace mwvcv
 
             bool weak = true;
             if (dst0 >= -1.0f && dst0 <= 1.0f && dst1 >= -1.0f && dst1 <= 1.0f) {
-                weak = 0;
+                weak = false;
             }
 
             unsigned int idx = atomicInc(d_PointCounter, 0x7fffffff);
@@ -755,6 +861,7 @@ namespace mwvcv
                 point.size               = (weak ? -1 : 1) * 2.0 * size;
                 float octsub             = (dst0 < 0 ? -1 : 1) * (octave + fabs(dst0));
                 *(float*)(&point.octave) = (weak ? octave : octsub);
+                point.octave             = (reset_octave ? octave : point.octave);
                 point.class_id           = scale;
                 int ratio                = (1 << octave);
                 point.pt.x               = ratio * (x);
@@ -772,7 +879,7 @@ namespace mwvcv
     }
 
     double findExtrema(CudaImage& img, CudaImage& imgp, CudaImage& imgn, float border, float dthreshold, int scale,
-                       int octave, float size, cv::KeyPoint* pts, int maxpts)
+                       int octave, float size, cv::KeyPoint* pts, int maxpts, bool reset_octave, int& nump)
     {
         TimerGPU timer(0);
 
@@ -781,8 +888,9 @@ namespace mwvcv
 
         float b = border;
         FindExtrema<<<blocks, threads>>>(img.d_data_, imgp.d_data_, imgn.d_data_, img.width_, img.pitch_, img.height_,
-                                         b, dthreshold, scale, octave, size, pts, maxpts);
+                                         b, dthreshold, scale, octave, size, pts, maxpts, reset_octave);
         copyIdxArray<<<1, 1>>>(scale);
+        cudaMemcpyFromSymbol(&nump, d_PointCounter, sizeof(int));
         // checkMsg("FindExtrema() execution failed\n");
         // safeCall(cudaDeviceSynchronize());
 
@@ -1012,7 +1120,7 @@ namespace mwvcv
         // Find neighbour in further scale
         if (scale > 0) {
             int startidx = d_ExtremaIdx[scale - 1];
-            cmpIdx = scale < 2 ? 0 : d_ExtremaIdx[scale - 2];
+            cmpIdx       = scale < 2 ? 0 : d_ExtremaIdx[scale - 2];
             for (int i = startidx - threadIdx.x - 1; i >= cmpIdx; i -= FindNeighborsThreads) {
                 cv::KeyPoint& kpt_cmp = pts[i];
                 if (kpt_cmp.pt.y - kpt.pt.y > size * .5f)
@@ -1255,8 +1363,6 @@ namespace mwvcv
 
     void filterExtrema(cv::KeyPoint* pts, cv::KeyPoint* newpts, int* kptindices, int& nump)
     {
-        cudaMemcpyFromSymbol(&nump, d_PointCounter, sizeof(int));
-
         unsigned int extremaidx_h[16];
         cudaMemcpyFromSymbol(extremaidx_h, d_ExtremaIdx, 16 * sizeof(unsigned int));
         int maxnump = extremaidx_h[0];
@@ -1405,106 +1511,6 @@ namespace mwvcv
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void initCompareIndices()
-    {
-        // 61 bytes, 488 bits
-        // the values in comp_idx_1 and comp_idx_2 is from 0 to 87, which is (2 x 2 + 3 x 3 + 4 x 4) x 3
-        // grid size is 2x2, 3x3 and 4x4, 3 channels (intensity + x-gradient + y-gradient)
-        int comp_idx_1_h[61 * 8];
-        int comp_idx_2_h[61 * 8];
-
-        // 2x2, 3 channels
-        int cntr = 0;
-        for (int j = 0; j < 3; ++j) {
-            for (int i = j + 1; i < 4; ++i) {
-                comp_idx_1_h[cntr] = 3 * j;
-                comp_idx_2_h[cntr] = 3 * i;
-                cntr++;
-            }
-        }
-        for (int j = 0; j < 3; ++j) {
-            for (int i = j + 1; i < 4; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 1;
-                comp_idx_2_h[cntr] = 3 * i + 1;
-                cntr++;
-            }
-        }
-        for (int j = 0; j < 3; ++j) {
-            for (int i = j + 1; i < 4; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 2;
-                comp_idx_2_h[cntr] = 3 * i + 2;
-                cntr++;
-            }
-        }
-
-        // 3x3
-        for (int j = 4; j < 12; ++j) {
-            for (int i = j + 1; i < 13; ++i) {
-                comp_idx_1_h[cntr] = 3 * j;
-                comp_idx_2_h[cntr] = 3 * i;
-                cntr++;
-            }
-        }
-        for (int j = 4; j < 12; ++j) {
-            for (int i = j + 1; i < 13; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 1;
-                comp_idx_2_h[cntr] = 3 * i + 1;
-                cntr++;
-            }
-        }
-        for (int j = 4; j < 12; ++j) {
-            for (int i = j + 1; i < 13; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 2;
-                comp_idx_2_h[cntr] = 3 * i + 2;
-                cntr++;
-            }
-        }
-
-        // 4x4
-        for (int j = 13; j < 28; ++j) {
-            for (int i = j + 1; i < 29; ++i) {
-                comp_idx_1_h[cntr] = 3 * j;
-                comp_idx_2_h[cntr] = 3 * i;
-                cntr++;
-            }
-        }
-        for (int j = 13; j < 28; ++j) {
-            for (int i = j + 1; i < 29; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 1;
-                comp_idx_2_h[cntr] = 3 * i + 1;
-                cntr++;
-            }
-        }
-        for (int j = 13; j < 28; ++j) {
-            for (int i = j + 1; i < 29; ++i) {
-                comp_idx_1_h[cntr] = 3 * j + 2;
-                comp_idx_2_h[cntr] = 3 * i + 2;
-                cntr++;
-            }
-        }
-
-        // Print out the arrays
-        // printf("comp_idx_1_h = [");
-        // for (int i = 0; i < cntr; ++i) {
-        //     printf("%d", comp_idx_1_h[i]);
-        //     if (i != cntr - 1) {
-        //         printf(", ");
-        //     }
-        // }
-        // printf("]\n");
-        // printf("comp_idx_2_h = [");
-        // for (int i = 0; i < cntr; ++i) {
-        //     printf("%d", comp_idx_2_h[i]);
-        //     if (i != cntr - 1) {
-        //         printf(", ");
-        //     }
-        // }
-        // printf("]\n");
-
-        cudaMemcpyToSymbol(comp_idx_1, comp_idx_1_h, 8 * 61 * sizeof(int));
-        cudaMemcpyToSymbol(comp_idx_2, comp_idx_2_h, 8 * 61 * sizeof(int));
-    }
-
     __global__ void ExtractDescriptors(cv::KeyPoint* d_pts, CudaImage* d_imgs, float* _vals, int size2, int size3,
                                        int size4)
     {
@@ -1622,43 +1628,6 @@ namespace mwvcv
             }
         }
 
-        //         __shared__ float warp_sums[4];  // enough for 4 warps
-        //
-        //         unsigned int mask = __activemask(); // current warp mask
-        //         int warp_id = tx / 32;              // warp number
-        //         int lane_id = tx % 32;              // thread index in warp
-        //
-        // #pragma unroll
-        //         for (int i = 0; i < 30; ++i) {
-        //             int offset = i;
-        //             for (int d = 0; d < 90; d += 30) {
-        //                 float val = acc_vals[3 * 30 * tx + offset + d];
-        //
-        //                 // Intra-warp reduction
-        //                 for (int delta = 16; delta > 0; delta /= 2)
-        //                     val += __shfl_down_sync(mask, val, delta);
-        //
-        //                 // Store each warp's partial sum
-        //                 if (lane_id == 0)
-        //                     warp_sums[warp_id] = val;
-        //
-        //                 __syncthreads();  // Ensure all warps wrote
-        //
-        //                 // Final reduction by warp 0
-        //                 if (warp_id == 0) {
-        //                     float final = (lane_id < 4) ? warp_sums[lane_id] : 0.0f;
-        //
-        //                     // 4-element reduction using shuffles
-        //                     final += __shfl_down_sync(0xFFFFFFFF, final, 1);
-        //                     final += __shfl_down_sync(0xFFFFFFFF, final, 2);
-        //
-        //                     if (lane_id == 0)
-        //                         acc_vals[offset + d] = final;
-        //                 }
-        //                 __syncthreads();
-        //             }
-        //         }
-
         __syncthreads();
 
         // Have 29*3 values to store
@@ -1721,11 +1690,6 @@ namespace mwvcv
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    void waitCuda()
-    {
-        cudaStreamSynchronize(copyStream);
-    }
 
 } // namespace mwvcv
 

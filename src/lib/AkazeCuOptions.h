@@ -79,6 +79,10 @@ namespace mwvcv
 
         int ncudaimages  = 4;         ///< Number of CUDA images allocated per octave
         int maxkeypoints = 16 * 8192; ///< Maximum number of keypoints allocated
+
+        // filterExtrema step takes a long time, but normally few keypoints are filtered
+        // We can skip this step to save some time for feature detection
+        bool skip_filter_extrema = true;
     };
 
 } // namespace mwvcv
