@@ -27,13 +27,22 @@ mwvcv::CudaAkaze::CudaAkaze(const AkazeCuOptions& options) : options_(options)
 {
     ncycles_    = 0;
     reordering_ = true;
+
+    allocateMemorySrcImg();
     allocateMemoryEvolution();
 }
 
 mwvcv::CudaAkaze::~CudaAkaze()
 {
     evolution_.clear();
-    freeBuffers(cuda_memory);
+
+    freeBuffer(cuda_source_image_);
+    freeBuffers(cuda_memory_);
+}
+
+void mwvcv::CudaAkaze::allocateMemorySrcImg()
+{
+    cuda_source_image_ = allocBuffer(options_.img_width, options_.img_height, cuda_source_image_pitch_);
 }
 
 void mwvcv::CudaAkaze::allocateMemoryEvolution()
@@ -87,10 +96,10 @@ void mwvcv::CudaAkaze::allocateMemoryEvolution()
     options_.ncudaimages  = 4 * options_.nsublevels;
     options_.maxkeypoints = 4 * ((options_.maxkeypoints + 3) / 4);
     unsigned char* _cuda_desc;
-    cuda_memory = allocBuffers(evolution_[0].Lt.cols, evolution_[0].Lt.rows, options_.ncudaimages, options_.omax,
-                               options_.maxkeypoints, cuda_buffers, cuda_bufferpoints, cuda_points, cuda_ptindices,
-                               _cuda_desc, cuda_descbuffer, cuda_images);
-    cuda_desc   = cv::Mat(options_.maxkeypoints, 61, CV_8U, _cuda_desc);
+    cuda_memory_ = allocBuffers(evolution_[0].Lt.cols, evolution_[0].Lt.rows, options_.ncudaimages, options_.omax,
+                               options_.maxkeypoints, cuda_buffers_, cuda_bufferpoints_, cuda_points_, cuda_ptindices_,
+                               _cuda_desc, cuda_descbuffer_, cuda_images_);
+    cuda_desc_   = cv::Mat(options_.maxkeypoints, 61, CV_8U, _cuda_desc);
 }
 
 int mwvcv::CudaAkaze::createNonlinearScaleSpace(const cv::Mat& img)
@@ -102,22 +111,25 @@ int mwvcv::CudaAkaze::createNonlinearScaleSpace(const cv::Mat& img)
 
     if (img.type() != CV_8UC1) {
         std::cerr << "Input frame image type is not CV_8UC1!" << std::endl;
+        return -1;
     }
-    // Convert the image to float to extract features
-    cv::Mat img_32F;
-    img.convertTo(img_32F, CV_32F, 1.0 / 255.0, 0);
 
     const auto t1 = static_cast<double>(cv::getTickCount());
 
     const TEvolution& ev = evolution_[0];
 
-    CudaImage& Limg    = cuda_buffers[0];
-    CudaImage& Lt      = cuda_buffers[0];
-    CudaImage& Lsmooth = cuda_buffers[1];
-    CudaImage& Ltemp   = cuda_buffers[2];
+    CudaImage& Limg    = cuda_buffers_[0];
+    CudaImage& Lt      = cuda_buffers_[0];
+    CudaImage& Lsmooth = cuda_buffers_[1];
+    CudaImage& Ltemp   = cuda_buffers_[2];
 
-    Limg.h_data_ = reinterpret_cast<float*>(img_32F.data);
-    Limg.download(); // NOLINT
+    // cv::Mat img_32F;
+    // img.convertTo(img_32F, CV_32F, 1.0 / 255.0, 0);
+    // Limg.h_data_ = reinterpret_cast<float*>(img_32F.data);
+    // Limg.download(); // NOLINT
+
+    prepareSourceImage(img, cuda_source_image_, options_.img_width, cuda_source_image_pitch_, options_.img_height,
+                       Limg.d_data_, Limg.pitch_);
 
     if (evolution_.size() > 1) {
         // kcontrast is only needed when we have more than 1 evolution level
@@ -137,14 +149,14 @@ int mwvcv::CudaAkaze::createNonlinearScaleSpace(const cv::Mat& img)
         const TEvolution& evn = evolution_[i];
 
         const int  num     = options_.ncudaimages;
-        CudaImage& Lt      = cuda_buffers[evn.octave * num + 0 + 4 * evn.sublevel]; // NOLINT
-        CudaImage& Lsmooth = cuda_buffers[evn.octave * num + 1 + 4 * evn.sublevel]; // NOLINT
-        CudaImage& Lstep   = cuda_buffers[evn.octave * num + 2];
-        CudaImage& Lflow   = cuda_buffers[evn.octave * num + 3];
+        CudaImage& Lt      = cuda_buffers_[evn.octave * num + 0 + 4 * evn.sublevel]; // NOLINT
+        CudaImage& Lsmooth = cuda_buffers_[evn.octave * num + 1 + 4 * evn.sublevel]; // NOLINT
+        CudaImage& Lstep   = cuda_buffers_[evn.octave * num + 2];
+        CudaImage& Lflow   = cuda_buffers_[evn.octave * num + 3];
 
         const TEvolution& evo = evolution_[i - 1];
 
-        CudaImage& Ltold = cuda_buffers[evo.octave * num + 0 + 4 * evo.sublevel];
+        CudaImage& Ltold = cuda_buffers_[evo.octave * num + 0 + 4 * evo.sublevel];
         if (evn.octave > evo.octave) {
             halfSample(Ltold, Lt);
             options_.kcontrast = options_.kcontrast * 0.75f;
@@ -174,9 +186,9 @@ void mwvcv::CudaAkaze::featureDetection(std::vector<cv::KeyPoint>& kpts)
     for (size_t i = 0; i < evolution_.size(); i++) { // NOLINT(*-loop-convert)
         const TEvolution& ev = evolution_[i];
 
-        CudaImage& Lsmooth = cuda_buffers[ev.octave * num + 1 + 4 * ev.sublevel];
-        CudaImage& Lx      = cuda_buffers[ev.octave * num + 2 + 4 * ev.sublevel];
-        CudaImage& Ly      = cuda_buffers[ev.octave * num + 3 + 4 * ev.sublevel];
+        CudaImage& Lsmooth = cuda_buffers_[ev.octave * num + 1 + 4 * ev.sublevel];
+        CudaImage& Lx      = cuda_buffers_[ev.octave * num + 2 + 4 * ev.sublevel];
+        CudaImage& Ly      = cuda_buffers_[ev.octave * num + 3 + 4 * ev.sublevel];
 
         float ratio = pow(2.0f, (float)evolution_[i].octave); // NOLINT
 
@@ -196,9 +208,9 @@ void mwvcv::CudaAkaze::featureDetection(std::vector<cv::KeyPoint>& kpts)
         const TEvolution& evn =
             evolution_[(i < evolution_.size() - 1 && evolution_[i].octave == evolution_[i + 1].octave ? i + 1 : i)];
 
-        CudaImage& Ldet = cuda_buffers[ev.octave * num + 1 + 4 * ev.sublevel];
-        CudaImage& LdetP = cuda_buffers[evp.octave * num + 1 + 4 * evp.sublevel];
-        CudaImage& LdetN = cuda_buffers[evn.octave * num + 1 + 4 * evn.sublevel];
+        CudaImage& Ldet = cuda_buffers_[ev.octave * num + 1 + 4 * ev.sublevel];
+        CudaImage& LdetP = cuda_buffers_[evp.octave * num + 1 + 4 * evp.sublevel];
+        CudaImage& LdetN = cuda_buffers_[evn.octave * num + 1 + 4 * evn.sublevel];
 
         float smax = 1.0f;
         if (options_.descriptor == DESCRIPTOR_TYPE::SURF_UPRIGHT || options_.descriptor == DESCRIPTOR_TYPE::SURF ||
@@ -218,11 +230,11 @@ void mwvcv::CudaAkaze::featureDetection(std::vector<cv::KeyPoint>& kpts)
         // If we aren't going to call filterExtrema in the next step, we will store proper value in.
         const bool reset_octave = options_.skip_filter_extrema;
         findExtrema(Ldet, LdetP, LdetN, border, thresh, i, evolution_[i].octave, // NOLINT
-                    size, cuda_points, options_.maxkeypoints, reset_octave, nump_);
+                    size, cuda_points_, options_.maxkeypoints, reset_octave, nump_);
     }
 
     if (!options_.skip_filter_extrema) {
-        filterExtrema(cuda_points, cuda_bufferpoints, cuda_ptindices, nump_);
+        filterExtrema(cuda_points_, cuda_bufferpoints_, cuda_ptindices_, nump_);
     }
 
     const auto t3 = static_cast<double>(cv::getTickCount());
@@ -260,10 +272,10 @@ void mwvcv::CudaAkaze::computeDescriptors(std::vector<cv::KeyPoint>& kpts, cv::M
 
     switch (options_.descriptor) {
     case DESCRIPTOR_TYPE::MLDB:
-        findOrientation(cuda_points, cuda_buffers, cuda_images, nump_);
-        getPoints(kpts, cuda_points, nump_);
-        extractDescriptors(cuda_points, cuda_images, cuda_desc.data, cuda_descbuffer, pattern_size, nump_);
-        getDescriptors(desc, cuda_desc, nump_);
+        findOrientation(cuda_points_, cuda_buffers_, cuda_images_, nump_);
+        getPoints(kpts, cuda_points_, nump_);
+        extractDescriptors(cuda_points_, cuda_images_, cuda_desc_.data, cuda_descbuffer_, pattern_size, nump_);
+        getDescriptors(desc, cuda_desc_, nump_);
         break;
     case DESCRIPTOR_TYPE::SURF_UPRIGHT:
     case DESCRIPTOR_TYPE::SURF:

@@ -148,6 +148,8 @@ std::tuple<std::vector<cv::KeyPoint>, cv::Mat, double> extractWithCudaAkaze(cons
     const auto t2 = static_cast<double>(cv::getTickCount());
     double     st = 1000.0 * (t2 - t1) / cv::getTickFrequency();
 
+    cudaAkaze.showComputationTimes();
+
     return {keypoints, descriptors, st};
 }
 

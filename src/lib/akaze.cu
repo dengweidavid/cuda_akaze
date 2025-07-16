@@ -42,6 +42,20 @@ namespace mwvcv
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    unsigned char* allocBuffer(const int width, const int height, int& pitch)
+    {
+        unsigned char* buffer = nullptr;
+        size_t pitch_ = 0;
+        safeCall(cudaMallocPitch((void**)&buffer, &pitch_, width * sizeof(unsigned char), height));
+        pitch = (int)pitch_;
+        return buffer;
+    }
+
+    void freeBuffer(unsigned char* buffer)
+    {
+        safeCall(cudaFree(buffer));
+    }
+
     float* allocBuffers(const int width, const int height, const int num, const int omax, const int maxpts,
                         std::vector<CudaImage>& buffers, cv::KeyPoint*& pts, cv::KeyPoint*& ptsbuffer, int*& ptindices,
                         unsigned char*& desc, float*& descbuffer, CudaImage*& ims)
@@ -230,6 +244,36 @@ namespace mwvcv
     void waitCuda()
     {
         cudaStreamSynchronize(copyStream);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    __global__ void ucharToFloatKernel(const unsigned char* d_input, size_t in_pitch, float* d_output, size_t out_pitch,
+                                       int width, int height)
+    {
+        int x = threadIdx.x + blockIdx.x * blockDim.x;
+        int y = threadIdx.y + blockIdx.y * blockDim.y;
+
+        if (x < width && y < height) {
+            const unsigned char* in_row  = (const unsigned char*)((const char*)d_input + y * in_pitch);
+            float*               out_row = (float*)((float*)d_output + y * out_pitch);
+
+            out_row[x] = static_cast<float>(in_row[x]) / 255.0f;
+        }
+    }
+
+    void prepareSourceImage(const cv::Mat& img, unsigned char* d_img, int width, int in_pitch, int height,
+                            float* d_data, int out_pitch)
+    {
+        safeCall(cudaMemcpy2D(d_img, in_pitch, img.data, sizeof(unsigned char) * width, sizeof(unsigned char) * width,
+                              height, cudaMemcpyHostToDevice));
+
+        dim3 block(16, 16);
+        dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+        ucharToFloatKernel<<<grid, block>>>(d_img, in_pitch, d_data, out_pitch, width, height);
+        // checkMsg("prepareSourceImage() execution failed\n");
+        // safeCall(cudaDeviceSynchronize());
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -891,8 +935,8 @@ namespace mwvcv
                                          b, dthreshold, scale, octave, size, pts, maxpts, reset_octave);
         copyIdxArray<<<1, 1>>>(scale);
         cudaMemcpyFromSymbol(&nump, d_PointCounter, sizeof(int));
-        // checkMsg("FindExtrema() execution failed\n");
-        // safeCall(cudaDeviceSynchronize());
+        //checkMsg("FindExtrema() execution failed\n");
+        //safeCall(cudaDeviceSynchronize());
 
         double gpuTime = timer.read();
 #ifdef VERBOSE
@@ -1682,9 +1726,9 @@ namespace mwvcv
         // safeCall(cudaDeviceSynchronize());
 
         double gpuTime = timer.read();
-#ifdef VERBOSE
+//#ifdef VERBOSE
         printf("ExtractDescriptors time =     %.2f ms\n", gpuTime);
-#endif
+//#endif
         return gpuTime;
     }
 

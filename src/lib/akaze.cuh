@@ -47,7 +47,7 @@
 #define ORIENT_S (13 * 16)
 #define EXTRACT_S 64
 
-#define VERBOSE
+// #define VERBOSE
 
 namespace mwvcv
 {
@@ -88,16 +88,23 @@ namespace mwvcv
         short y;
     };
 
+    unsigned char* allocBuffer(int width, int height, int& pitch);
+    void           freeBuffer(unsigned char* buffer);
+
     float* allocBuffers(int width, int height, int num, int omax, int maxpts, std::vector<CudaImage>& buffers,
                         cv::KeyPoint*& pts, cv::KeyPoint*& ptsbuffer, int*& ptindices, unsigned char*& desc,
                         float*& descbuffer, CudaImage*& ims);
     void   freeBuffers(float* buffers);
-    void   initCompareIndices();
+
+    void initCompareIndices();
 
     void clearPoints();
     int  getPoints(std::vector<cv::KeyPoint>& h_pts, cv::KeyPoint* d_pts, int numPts);
     void getDescriptors(cv::Mat& h_desc, cv::Mat& d_desc, int numPts);
     void waitCuda();
+
+    void prepareSourceImage(const cv::Mat& img, unsigned char* d_img, int width, int in_pitch, int height,
+                            float* d_data, int out_pitch);
 
     double lowPass(CudaImage& inimg, CudaImage& outimg, CudaImage& temp, double var, int kernsize);
     double contrastPercentile(CudaImage& img, CudaImage& temp, CudaImage& blur, float perc, int nbins, float& contrast);

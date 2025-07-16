@@ -51,6 +51,7 @@ namespace mwvcv
         {
             cudaEventCreate(&start_);
             cudaEventCreate(&stop_);
+            cudaEventRecord(start_, stream_);
         }
 
         cudaEvent_t  start_{}, stop_{};

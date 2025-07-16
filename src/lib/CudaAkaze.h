@@ -72,6 +72,9 @@ namespace mwvcv
         void showComputationTimes() const;
 
       private:
+        /// Allocate the memory for the source image
+        void allocateMemorySrcImg();
+
         /// Allocate the memory for the nonlinear scale space
         void allocateMemoryEvolution();
 
@@ -87,17 +90,24 @@ namespace mwvcv
         std::vector<std::vector<float>> tsteps_;     ///< Vector of FED dynamic time steps
         std::vector<int>                nsteps_;     ///< Vector of number of steps per cycle
 
-        /// CUDA memory buffers
-        float*                 cuda_memory       = nullptr;
-        cv::KeyPoint*          cuda_points       = nullptr;
-        cv::KeyPoint*          cuda_bufferpoints = nullptr;
-        cv::Mat                cuda_desc;
-        float*                 cuda_descbuffer = nullptr;
-        int*                   cuda_ptindices  = nullptr;
-        CudaImage*             cuda_images     = nullptr;
-        std::vector<CudaImage> cuda_buffers;
+        /// Pointer to CUDA device memory for storing the source image. This memory is allocated on the GPU.
+        /// It holds the source image for processing in CUDA-based AKAZE operations.
+        unsigned char* cuda_source_image_ = nullptr;
+        int cuda_source_image_pitch_ = 0;
 
-        int nump_ = 0; ///< Number of detected feature points
+        /// CUDA memory buffers
+        /// These memory is allocated on the GPU, and the following are pointers to CUDA device memory
+        float*                 cuda_memory_       = nullptr;
+        cv::KeyPoint*          cuda_points_       = nullptr;
+        cv::KeyPoint*          cuda_bufferpoints_ = nullptr;
+        cv::Mat                cuda_desc_;
+        float*                 cuda_descbuffer_ = nullptr;
+        int*                   cuda_ptindices_  = nullptr;
+        CudaImage*             cuda_images_     = nullptr;
+        std::vector<CudaImage> cuda_buffers_;
+
+        /// Number of detected feature points
+        int nump_ = 0;
 
         /// Computation times variables in ms
         AkazeTiming timing_;
