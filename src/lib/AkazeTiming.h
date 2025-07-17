@@ -24,6 +24,7 @@ namespace mwvcv
     {
         AkazeTiming()
         {
+            prepare     = 0.0;
             kcontrast   = 0.0;
             scale       = 0.0;
             derivatives = 0.0;
@@ -33,6 +34,7 @@ namespace mwvcv
             descriptor  = 0.0;
         }
 
+        double prepare;     ///< Upload time from CPU to GPU in ms + convert image to float32
         double kcontrast;   ///< Contrast factor computation time in ms
         double scale;       ///< Nonlinear scale space computation time in ms
         double derivatives; ///< Multiscale derivatives computation time in ms

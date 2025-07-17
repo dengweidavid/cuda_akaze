@@ -123,13 +123,9 @@ int mwvcv::CudaAkaze::createNonlinearScaleSpace(const cv::Mat& img)
     CudaImage& Lsmooth = cuda_buffers_[1];
     CudaImage& Ltemp   = cuda_buffers_[2];
 
-    // cv::Mat img_32F;
-    // img.convertTo(img_32F, CV_32F, 1.0 / 255.0, 0);
-    // Limg.h_data_ = reinterpret_cast<float*>(img_32F.data);
-    // Limg.download(); // NOLINT
-
     prepareSourceImage(img, cuda_source_image_, options_.img_width, cuda_source_image_pitch_, options_.img_height,
                        Limg.d_data_, Limg.pitch_);
+    timing_.prepare = 1000.0 * (static_cast<double>(cv::getTickCount()) - t1) / cv::getTickFrequency();
 
     if (evolution_.size() > 1) {
         // kcontrast is only needed when we have more than 1 evolution level
@@ -295,6 +291,7 @@ void mwvcv::CudaAkaze::computeDescriptors(std::vector<cv::KeyPoint>& kpts, cv::M
 void mwvcv::CudaAkaze::showComputationTimes() const
 {
     std::cout << "(*) Time Scale Space: " << timing_.scale << std::endl;
+    std::cout << "   - Time Prepare: " << timing_.prepare << std::endl;
     std::cout << "   - Time KContrast: " << timing_.kcontrast << std::endl;
     std::cout << "(*) Time Detector: " << timing_.detector << std::endl;
     std::cout << "   - Time Derivatives: " << timing_.derivatives << std::endl;

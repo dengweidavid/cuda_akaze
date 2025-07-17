@@ -1685,20 +1685,32 @@ namespace mwvcv
 
     __global__ void BuildDescriptor(float* _valsim, unsigned char* _desc)
     {
+        __shared__ int comp_idx_1_s[61 * 8];
+        __shared__ int comp_idx_2_s[61 * 8];
+
         int p   = blockIdx.x;
         int idx = threadIdx.x;
 
+        // Each thread helps load shared memory
+        for (int i = idx; i < 61 * 8; i += blockDim.x) {
+            comp_idx_1_s[i] = comp_idx_1[i];
+            comp_idx_2_s[i] = comp_idx_2[i];
+        }
+        __syncthreads();
+
         if (idx < 61) {
-            float* valsim = &_valsim[3 * 29 * p];
+            const float* valsim = &_valsim[3 * 29 * p];
+            unsigned char* desc = &_desc[61 * p];
 
-            unsigned char* desc   = &_desc[61 * p];
-            unsigned char  desc_r = 0;
-
+            unsigned char desc_r = 0;
+            int count = (idx == 60) ? 6 : 8;
 #pragma unroll
-            for (int i = 0; i < (idx == 60 ? 6 : 8); ++i) {
-                int idx1 = comp_idx_1[idx * 8 + i];
-                int idx2 = comp_idx_2[idx * 8 + i];
-                desc_r |= (valsim[idx1] > valsim[idx2] ? 1 : 0) << i;
+            for (int i = 0; i < 8; ++i) {
+                if (i < count) {
+                    int idx1 = comp_idx_1_s[idx * 8 + i];
+                    int idx2 = comp_idx_2_s[idx * 8 + i];
+                    desc_r |= (valsim[idx1] > valsim[idx2] ? 1 : 0) << i;
+                }
             }
 
             desc[idx] = desc_r;
@@ -1726,9 +1738,9 @@ namespace mwvcv
         // safeCall(cudaDeviceSynchronize());
 
         double gpuTime = timer.read();
-//#ifdef VERBOSE
+#ifdef VERBOSE
         printf("ExtractDescriptors time =     %.2f ms\n", gpuTime);
-//#endif
+#endif
         return gpuTime;
     }
 

@@ -47,7 +47,7 @@
 #define ORIENT_S (13 * 16)
 #define EXTRACT_S 64
 
-// #define VERBOSE
+#define VERBOSE
 
 namespace mwvcv
 {
